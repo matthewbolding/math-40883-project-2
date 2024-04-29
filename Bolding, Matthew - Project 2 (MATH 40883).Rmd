@@ -1,0 +1,260 @@
+---
+output: 
+  pdf_document:
+    number_sections: true
+    extra_dependencies: ["float"]
+geometry: margin=1in
+---
+
+\noindent{\large\bfseries Matthew Bolding} 
+
+\vspace{-5pt} \noindent{\large\bfseries Dr. Nelis Potgieter}
+
+\vspace{-5pt} \noindent{\large\bfseries MATH 40883–015}
+
+\vspace{-5pt} \noindent{\large\bfseries April 27\textsuperscript{th}, 2022}
+
+\begin{center}
+    \LARGE\bfseries Predictive Modeling: Project 2
+\end{center}
+
+\vspace{-5pt}
+<!-- \small -->
+\section{Missing Data}
+First, we import the data, and we may take note of the number of observations.
+```{r import}
+dataset <- read.table("project2.data", header = T, sep = ";")
+nrow(dataset)
+```
+
+```{r na.omit, results='hold', echo=FALSE}
+library(caTools)
+dataset <- na.omit(dataset)
+```
+After removing all observations that have missing data via the `na.omit` command, we now have a dataset with `r nrow(dataset)` rows. We have lost 20 observations.
+\section{Partitioning Data}
+
+Using a function in the `caTools` library, we may split the data.
+
+```{r partition.data}
+# Note we set a seed for repeatability.
+set.seed(1984)
+
+# We have a 70/30 split for training and validation data, respectively.
+index <- sample.split(dataset$y, SplitRatio = 0.7)
+train <- subset(dataset, index == TRUE)
+valid <- subset(dataset, index == FALSE)
+```
+
+\section{Data Visualizations}
+
+Before visualizing any data, let us first calculate the means and standard deviations for all variables $x_1, \ldots, x_5$ while also noting successes and failures across the observations. We may find all successes and failures in the following way.
+
+```{r success.failure}
+success.index <- which(train$y > 0.5)
+success <- train[success.index, ]
+failure <- train[-success.index, ]
+```
+
+We may then calculate the means and standard deviations for each variable for both outcomes with the `mean()` and `sd()` commands. (These commands are hidden for brevity---see the attached `.r` file all commands.) With such information, we may construct a table to easily view interesting trends that may exist.
+
+```{r mean.sd, echo=FALSE, eval=FALSE}
+mean(success$x1)
+mean(success$x2)
+mean(success$x3)
+mean(success$x4)
+mean(success$x5)
+
+mean(failure$x1)
+mean(failure$x2)
+mean(failure$x3)
+mean(failure$x4)
+mean(failure$x5)
+
+sd(success$x1)
+sd(success$x2)
+sd(success$x3)
+sd(success$x4)
+sd(success$x5)
+
+sd(failure$x1)
+sd(failure$x2)
+sd(failure$x3)
+sd(failure$x4)
+sd(failure$x5)
+```
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c|cc|cc|}
+ & \multicolumn{2}{c|}{\textbf{Mean}} & \multicolumn{2}{c|}{\textbf{Standard Deviation}} \\ \hline
+\textbf{Variable} & \multicolumn{1}{c|}{\textit{Successes}} & \textit{Failures} & \multicolumn{1}{c|}{\textit{Successes}} & \textit{Failures} \\ \hline
+$x_1$ & \multicolumn{1}{c|}{-1.09839300} & -0.06809524 & \multicolumn{1}{c|}{0.9917071} & 1.0016350 \\ \hline
+$x_2$ & \multicolumn{1}{c|}{\hspace{0.2mm} 0.01166667} & \hspace{0.2mm} 0.01559524 & \multicolumn{1}{c|}{1.2673250} & 0.9951720 \\ \hline
+$x_3$ & \multicolumn{1}{c|}{\hspace{0.2mm} 1.07101200} & \hspace{0.2mm} 0.06916667 & \multicolumn{1}{c|}{1.2206070} & 0.9679699 \\ \hline
+$x_4$ & \multicolumn{1}{c|}{\hspace{0.2mm} 0.07684524} & -0.05625000 & \multicolumn{1}{c|}{0.9197338} & 1.0410630 \\ \hline
+$x_5$ & \multicolumn{1}{c|}{-0.05904762} &  \hspace{0.2mm} 0.03136905 & \multicolumn{1}{c|}{0.9056451} & 1.0404580 \\ \hline
+\end{tabular}
+\end{table}
+
+Observe that the means for $x_1$ and $x_3$ across successes and failures compared to other variables differ by at least 1.0. Further note the correlation between $x_1$ and $x_3$ to the output variable $y$. `cor(train$x1, train$y) = -0.4602401` and `cor(train$x3, train$y) = 0.4149753`.
+
+```{r cor, results='hold', echo=FALSE, eval=FALSE}
+cor(train$x1, train$y)
+cor(train$x3, train$y)
+```
+
+These relatively high correlations combined with means differing between successes and failures gives us the motivation to visualize $x_1$ and $x_3$ values, differentiating between successes and failures. The below does visualizes such for $x_1$ and $y$. The associated `.r` file contains the other graph's code.
+
+```{r show.code, eval=FALSE}
+boxplot(success$x1, failure$x1,
+        ylab = expression('x'[1] * " Values"),
+        names = c("Successes", "Failures"))
+```
+
+```{r, plots, fig.show="hold", out.width="50%", fig.height=5, echo=FALSE}
+success.x1 <- success$x1
+failure.x1 <- failure$x1
+
+boxplot(success.x1, failure.x1,
+        ylab = expression('x'[1] * " Values"),
+        names = c("Successes", "Failures"))
+
+
+success.x3 <- success$x3
+failure.x3 <- failure$x3
+
+boxplot(success.x3, failure.x3,
+        ylab = expression('x'[3] * " Values"),
+        names = c("Successes", "Failures"))
+```
+
+Observe that these box plots show some degree of separation, so linear logistic regression would likely work well---especially when using input variables $x_1$ and $x_3$---to predict whether a bank account defaulted in the last three months.
+
+On one hand, variables $x_2$, $x_4$, and $x_5$ would likely contribute very little to the predictive ability of the model trained from linear predictors, as their means are so similar between successes and failures; yet on another, recall that, within the context of quadratic predictors, differing standard deviations between successes and predictors might improve a model's predictive ability.
+
+Observe that, across successes and failures, the standard deviations of both $x_2$ and $x_3$ differ by about a quarter, $x_4$ and $x_5$ differ by about an eight, and $x_1$ by about a hundredth. Therefore, since we have found that variables $x_2$, $x_3$ have the greatest differences between standard deviations across outcomes, we might expect these predictors, added as quadratic terms to the logistic model, to improve the predictive ability most. We might also expect $x_1$ as a quadratic predictor to contribute very little to the model's performance.
+
+For the sake of this section, we may also construct two histograms to display the differing standard deviations of `success$x2` and `failure$x2`. As the graph confirms, we may see that the $x_2$ predictor's standard deviation is different when considering the two outcomes! (See the `.r` file for the code.)
+
+```{r std.dev.hist, echo=FALSE, fig.show="hold", out.width="50%", fig.height=4.5}
+hist(success$x2, breaks = 16, 
+     xlim = c(-4, 4), 
+     ylim = c(0, 40), 
+     main = expression("Histogram of " * 'x'[2] * " Values (Success)"),
+     xlab = expression('x'[2] * " Values (Success)"))
+
+hist(failure$x2, breaks = 16, 
+     xlim = c(-4, 4), 
+     ylim = c(0, 40), 
+     main = expression("Histogram of " * 'x'[2] * " Values (Failure)"),
+     xlab = expression('x'[2] * " Values (Failure)"))
+```
+
+\section{Prediction Models}
+
+Before starting the training process, we may initialize our environment.
+
+```{r initalize}
+n <- nrow(train)
+folds <- sample(rep(1:8, length = n))
+```
+
+\subsection{Logistic Regression with Linear Terms}
+
+We may train a model with only linear terms with logistic regression.
+
+```{r linear}
+Linear.MSE <- NULL
+
+# We iterate 8 times to implement 8-fold cross-validation.
+for(k in 1:8) {
+  # Make the train and validation set.
+  sub.train <- train[folds!=k,]
+  sub.valid <- train[folds==k,]
+  
+  # Train the mode.
+  logistic.mod <- glm(y ~ ., data = sub.train, family = binomial)
+  
+  # Calculate y hats.
+  logistic.pred <- predict(logistic.mod, newdata = sub.valid, type = "response")
+  
+  # Calculate the MSE for this pass.
+  Linear.MSE[k] <- mean((logistic.pred - sub.valid$y)^2)
+}
+Linear.CV <- mean(Linear.MSE)
+Linear.CV
+```
+
+\subsection{Logistic Regression with Linear and Quadratic Terms}
+
+We may also train a model with both linear and quadratic terms with logistic regression. Before this, however, we must create the quadratic terms.
+
+```{r quad.init}
+quad.train <- train
+quad.train$x1.2 <- quad.train$x1^2
+quad.train$x2.2 <- quad.train$x2^2
+quad.train$x3.2 <- quad.train$x3^2
+quad.train$x4.2 <- quad.train$x4^2
+quad.train$x5.2 <- quad.train$x5^2
+```
+
+Train the model.
+
+```{r linear.quad}
+# We proceed very similarly to the linear logistic regression.
+Linear.Quad.MSE <- NULL
+for(k in 1:8) {
+  sub.train <- quad.train[folds!=k,]
+  sub.valid <- quad.train[folds==k,]
+  
+  logistic.mod <- glm(y ~ ., data = sub.train, family = binomial)
+  logistic.pred <- predict(logistic.mod, newdata = sub.valid, type = "response")
+  Linear.Quad.MSE[k] <- mean((logistic.pred - sub.valid$y)^2)
+}
+Linear.Quad.CV <- mean(Linear.Quad.MSE)
+Linear.Quad.CV
+```
+
+\section{Fitting the Best Model}
+
+Observe that the cross-validation score for the logistic model with both linear and quadratic terms (`r Linear.Quad.CV`) is less than the one with only linear terms (`r Linear.CV`), so we may conclude that the model with both linear and quadratic preforms better.
+
+Then, let us train a logistic model with with the appropriate dataset, i.e., the one with quadratic terms, and predict values from the validation data. Prior to predicting values, however, we must add the quadratic terms to the presently linear `valid` dataset. We do this similarly as in **Section 4.2**. We make a copy of `valid`, named `quad.valid` and add the quadratic terms.
+
+```{r valid.quad, echo=FALSE}
+quad.valid <- valid
+quad.valid$x1.2 <- quad.valid$x1^2
+quad.valid$x2.2 <- quad.valid$x2^2
+quad.valid$x3.2 <- quad.valid$x3^2
+quad.valid$x4.2 <- quad.valid$x4^2
+quad.valid$x5.2 <- quad.valid$x5^2
+```
+
+```{r final.model}
+best.mod <- glm(y ~ ., data = quad.train, family = binomial)
+best.pred <- predict(best.mod, newdata = quad.valid, type = "response")
+
+# Categorize the predictions.
+best.pred <- ifelse(best.pred > 0.5, 1, 0)
+```
+
+With these predictions, we may calculate the overall mis-classification rate, the false-positive rate, and the false-negative rate. First, we may create the confusion matrix and calculate the other values.
+
+```{r conf.matrix}
+Conf.Matrix <- table(Predicted = best.pred, True = valid$y)
+
+Mis.Class.Rate <- 1 - (sum(diag(Conf.Matrix))/sum(Conf.Matrix))
+False.Neg <- Conf.Matrix[2]/(Conf.Matrix[1] + Conf.Matrix[2])
+False.Pos <- Conf.Matrix[4]/(Conf.Matrix[3] + Conf.Matrix[4])
+```
+
+We may view these values, computed from the confusion matrix.
+```{r printing, echo=FALSE}
+Conf.Matrix
+sprintf("Overall Mis-classification Rate: %s", round(Mis.Class.Rate, 3))
+sprintf("False Negative Rate:             %s", round(False.Neg, 3))
+sprintf("False Positive Rate:             %s", round(False.Pos, 3))
+```
+
+The false negative rate is similar to the overall mis-classification rate, however, the false positive rate is much larger than that figure! As statisticians analyzing the data, we might not know the direct effect of having a high false positive rate within the bank's application. This large value may or may not be of concern to the bank, but it's certainly worth pointing out.
